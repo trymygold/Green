@@ -1,0 +1,134 @@
+<html>
+  <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.0.0/dist/aframe-extras.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>
+    <style>
+      #playButton {
+        display: none; /* Hides the button from view */
+      }
+      /* Hide the VR button */
+      .a-enter-vr-button {
+        display: none !important;
+      }
+
+      /* Style for the website button at the bottom-left corner */
+      #websiteButton {
+        position: fixed;
+        bottom: 10px;
+        left: 10px;
+        padding: 10px 20px;
+        background-color: #007BFF;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-size: 16px;
+        z-index: 999; /* Ensures the button is always on top */
+        text-decoration: none;
+      }
+
+      #websiteButton:hover {
+        background-color: #0056b3;
+      }
+
+      canvas {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <a-scene mindar-image="imageTargetSrc: targets.mind;" 
+             color-space="sRGB" 
+             renderer="colorManagement: true, physicallyCorrectLights" 
+             vr-mode-ui="enabled: false" 
+             device-orientation-permission-ui="enabled: false">
+      
+      <a-assets>
+        <!-- Load video for the single image target -->
+        <video id="video1" src="vid2.mp4" crossorigin="anonymous" playsinline loop></video>
+      </a-assets>
+
+      <a-camera position="0 0 0" look-controls="enabled: false"></a-camera>
+
+      <!-- Image Target -->
+      <a-entity mindar-image-target="targetIndex: 0" id="target1">
+        <a-video id="chromaVideo" src="" position="0 0 0" rotation="0 0 0" scale="1 .80 1" width="1" height="0.81"></a-video>
+      </a-entity>
+      
+    </a-scene>
+
+    <!-- Play/Pause Button (Hidden) -->
+    <button id="playButton">Play Video</button>
+
+    <!-- Website Hyperlink Button -->
+    <a id="websiteButton" href="https://the-car-shop.odoo.com/" target="_blank">Visit Website</a>
+
+    <!-- Hidden canvas for processing the video frames -->
+    <canvas id="chromaCanvas"></canvas>
+
+    <script>
+      const video1 = document.querySelector('#video1');
+      const canvas = document.getElementById('chromaCanvas');
+      const context = canvas.getContext('2d');
+      const chromaVideo = document.querySelector('#chromaVideo');
+      const playButton = document.querySelector('#playButton');
+
+      let isPlaying = false;
+      let currentVideo = null;
+
+      video1.addEventListener('loadeddata', () => {
+        canvas.width = video1.videoWidth;
+        canvas.height = video1.videoHeight;
+      });
+
+      // Function to update current video based on target visibility
+      const updateCurrentVideo = () => {
+        const target1 = document.querySelector('#target1');
+        const target1Active = target1.components['mindar-image-target'].el.object3D.visible;
+
+        if (target1Active) {
+          processChromaKey(video1);
+        } else {
+          if (currentVideo) {
+            currentVideo.pause();
+            playButton.innerText = "Play Video";
+            isPlaying = false;
+            currentVideo = null; // Reset currentVideo
+          }
+        }
+      };
+
+      // Continuously check target visibility
+      setInterval(updateCurrentVideo, 500); // Check every half second
+
+      // Function to process chroma key (remove green screen)
+      const processChromaKey = (video) => {
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        let frame = context.getImageData(0, 0, canvas.width, canvas.height);
+        let data = frame.data;
+
+        // Loop over each pixel and apply chroma key filter
+        for (let i = 0; i < data.length; i += 4) {
+          let red = data[i];
+          let green = data[i + 1];
+          let blue = data[i + 2];
+
+          // If the pixel is green (adjust tolerance based on video)
+          if (green > 100 && red < 100 && blue < 100) {
+            data[i + 3] = 0; // Make the pixel transparent
+          }
+        }
+
+        context.putImageData(frame, 0, 0);
+
+        // Update the texture on the A-Frame video element
+        const texture = new THREE.Texture(canvas);
+        texture.needsUpdate = true;
+        const material = target1.getObject3D('mesh').material;
+        material.map = texture;
+      };
+    </script>
+  </body>
+</html>
